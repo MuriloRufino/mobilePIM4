@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/Services/api_service.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter_application_1/Auth/api_client.dart';
 
 void main() {
   runApp(Appglobal(title: 'Conta funcionario'));
@@ -98,27 +101,69 @@ class _TelaLoginState extends State<TelaLogin> {
     super.dispose();
   }
 
-  void _entrar(Paleta p) {
-    if (nome_entrada.text == 'A' && senha_entrada.text == '1') {
+  Future<void> _entrar(Paleta p) async {
+    try {
+      await ApiClient.instance.login(
+        usuario: nome_entrada.text.trim(),
+        senha: senha_entrada.text,
+      );
+
+      if (!mounted) return;
+
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => tela_dois(temaEscuro: widget.temaEscuro),
         ),
       );
-    } else {
+    } on DioException catch (e) {
+      if (!mounted) return;
+
+      final mensagem = e.response?.data is Map
+          ? e.response?.data['mensagem'] ?? 'Não foi possível realizar o login.'
+          : 'Erro de comunicação com o servidor.';
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: p.card,
-          behavior: SnackBarBehavior.floating,
+          content: Text(mensagem.toString(), style: TextStyle(color: p.texto)),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: p.card,
           content: Text(
-            'Login ou senha incorretos. Confira os dados e tente de novo.',
-            style: TextStyle(color: p.texto, fontSize: 13),
+            'Erro ao realizar login: $e',
+            style: TextStyle(color: p.texto),
           ),
         ),
       );
     }
   }
+  // void _entrar(Paleta p) {
+  //   if (nome_entrada.text == 'A' && senha_entrada.text == '1') {
+  //     Navigator.push(
+  //       context,
+  //       MaterialPageRoute(
+  //         builder: (context) => tela_dois(temaEscuro: widget.temaEscuro),
+  //       ),
+  //     );
+  //   } else {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(
+  //         backgroundColor: p.card,
+  //         behavior: SnackBarBehavior.floating,
+  //         content: Text(
+  //           'Login ou senha incorretos. Confira os dados e tente de novo.',
+  //           style: TextStyle(color: p.texto, fontSize: 13),
+  //         ),
+  //       ),
+  //     );
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -152,7 +197,8 @@ class _TelaLoginState extends State<TelaLogin> {
                           activeTrackColor: p.botao,
                           inactiveThumbColor: Colors.white,
                           inactiveTrackColor: p.bordaCampo,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                         ),
                       ),
                     ],
@@ -163,7 +209,10 @@ class _TelaLoginState extends State<TelaLogin> {
             Expanded(
               child: Center(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 420),
                     child: Container(
@@ -279,13 +328,9 @@ class _TelaLoginState extends State<TelaLogin> {
   }
 
   Widget _rotulo(String texto, Paleta p) => Text(
-        texto,
-        style: TextStyle(
-          color: p.texto,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      );
+    texto,
+    style: TextStyle(color: p.texto, fontSize: 12, fontWeight: FontWeight.w700),
+  );
 
   Widget _campo({
     required TextEditingController controller,
@@ -295,9 +340,9 @@ class _TelaLoginState extends State<TelaLogin> {
     bool senha = false,
   }) {
     OutlineInputBorder borda(Color cor) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: cor),
-        );
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: cor),
+    );
 
     return TextField(
       controller: controller,
@@ -335,10 +380,7 @@ class _Logo extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: p.destaque, width: 1.2),
             boxShadow: [
-              BoxShadow(
-                color: p.destaque.withOpacity(0.35),
-                blurRadius: 10,
-              ),
+              BoxShadow(color: p.destaque.withOpacity(0.35), blurRadius: 10),
             ],
           ),
           child: Text(
@@ -362,7 +404,10 @@ class _Logo extends StatelessWidget {
             ),
             children: [
               const TextSpan(text: 'Acesso'),
-              TextSpan(text: 'Car', style: TextStyle(color: p.destaque)),
+              TextSpan(
+                text: 'Car',
+                style: TextStyle(color: p.destaque),
+              ),
             ],
           ),
         ),
@@ -376,10 +421,6 @@ class Carro {
   final String cor;
   final String placa;
   final String chassi;
-  final String conservacao;
-  final bool abastecido;
-  final String tempoParado;
-  final int vezesOficina;
   final String tipoAdaptacao;
   final String? adaptacaoPcd;
   final String status;
@@ -389,10 +430,6 @@ class Carro {
     required this.cor,
     required this.placa,
     required this.chassi,
-    required this.conservacao,
-    required this.abastecido,
-    required this.tempoParado,
-    required this.vezesOficina,
     required this.tipoAdaptacao,
     this.adaptacaoPcd,
     this.status = 'Disponível',
@@ -405,15 +442,33 @@ class Carro {
     if (t.isEmpty) return true;
     return [modelo, cor, placa, status].any((c) => c.toLowerCase().contains(t));
   }
+
+  factory Carro.fromJson(
+    Map<String, dynamic> json, {
+    Map<String, dynamic>? adaptacao,
+  }) {
+    final marca = json['marca'] ?? json['Marca'] ?? '';
+    final modelo = json['modelo'] ?? json['Modelo'] ?? '';
+
+    return Carro(
+      modelo: '$marca $modelo'.trim(),
+      cor: json['cor'] ?? json['Cor'] ?? '',
+      placa: json['placa'] ?? json['Placa'] ?? '',
+      chassi: (json['numero'] ?? json['Numero'] ?? '').toString(),
+      tipoAdaptacao: adaptacao?['tipo'] ?? adaptacao?['Tipo'] ?? '',
+      adaptacaoPcd: adaptacao == null
+          ? null
+          : (adaptacao['nome'] ?? adaptacao['Nome'] ?? ''),
+      status: json['estado'] ?? json['Estado'] ?? 'Indisponível',
+    );
+  }
 }
 
 class Aluguel {
   final Carro carro;
   final String nome;
   final String cpf;
-  final String localizacao;
-  final String cnh;
-  final String? pcdUsuario;
+  
   final DateTime dataAluguel;
   final DateTime dataEntrega;
 
@@ -421,18 +476,19 @@ class Aluguel {
     required this.carro,
     required this.nome,
     required this.cpf,
-    required this.localizacao,
-    required this.cnh,
     required this.dataAluguel,
     required this.dataEntrega,
-    this.pcdUsuario,
+    
   });
 
   int get diasRestantes {
     final agora = DateTime.now();
     final hoje = DateTime(agora.year, agora.month, agora.day);
-    final entrega =
-        DateTime(dataEntrega.year, dataEntrega.month, dataEntrega.day);
+    final entrega = DateTime(
+      dataEntrega.year,
+      dataEntrega.month,
+      dataEntrega.day,
+    );
     return entrega.difference(hoje).inDays;
   }
 
@@ -440,6 +496,7 @@ class Aluguel {
     final d = diasRestantes;
     if (d < 0) return 'Atrasado';
     if (d == 0) return 'Devolve hoje';
+    
     return 'Em dia';
   }
 
@@ -453,8 +510,27 @@ class Aluguel {
   bool combina(String q) {
     final t = q.trim().toLowerCase();
     if (t.isEmpty) return true;
-    return [nome, carro.modelo, carro.cor, carro.placa, status]
-        .any((c) => c.toLowerCase().contains(t));
+    return [
+      nome,
+      carro.modelo,
+      carro.cor,
+      carro.placa,
+      status,
+    ].any((c) => c.toLowerCase().contains(t));
+  }
+
+  factory Aluguel.fromJson(Map<String, dynamic> json, {required Carro carro}) {
+    final cliente = Map<String, dynamic>.from(
+      json['cliente'] ?? json['Cliente'] ?? {},
+    );
+
+    return Aluguel(
+      carro: carro,
+      nome: cliente['nome'] ?? cliente['Nome'] ?? '',
+      cpf: cliente['cpf'] ?? cliente['CPF'] ?? '',
+      dataAluguel: DateTime.parse(json['data_Inicio'] ?? json['Data_Inicio']),
+      dataEntrega: DateTime.parse(json['data_Fim'] ?? json['Data_Fim']),
+    );
   }
 }
 
@@ -475,8 +551,162 @@ class _TelaDoisState extends State<tela_dois>
   late final TabController _tabs;
   String busca = '';
 
-  late final List<Aluguel> _alugueis;
-  late final List<Carro> _estoque;
+  // late final List<Aluguel> _alugueis;
+  // late final List<Carro> _estoque;
+
+  List<Aluguel> _alugueis = [];
+  List<Carro> _estoque = [];
+
+  bool carregando = true;
+  String? erro;
+  // Future<void> carregarDados() async {
+  //   setState(() {
+  //     carregando = true;
+  //     erro = null;
+  //   });
+
+  //   try {
+  //     print('Iniciando carregamento...');
+
+  //     print('Buscando aluguéis...');
+  //     final alugueis = await ApiService.listarAlugueis().timeout(
+  //       const Duration(seconds: 15),
+  //     );
+  //     print('Aluguéis carregados: ${alugueis.length}');
+
+  //     print('Buscando carros...');
+  //     final carros = await ApiService.listarCarros().timeout(
+  //       const Duration(seconds: 15),
+  //     );
+  //     print('Carros carregados: ${carros.length}');
+
+  //     print('Buscando adaptações...');
+  //     final adaptacoes = await ApiService.listarAdaptacoes().timeout(
+  //       const Duration(seconds: 15),
+  //     );
+  //     print('Adaptações carregadas: ${adaptacoes.length}');
+
+  //     // Mantenha aqui o restante do processamento atual.
+  //   } catch (e, stackTrace) {
+  //     print('ERRO AO CARREGAR DADOS: $e');
+  //     print(stackTrace);
+
+  //     if (!mounted) return;
+
+  //     setState(() {
+  //       erro = e.toString();
+  //       carregando = false;
+  //     });
+  //   }
+  // }
+  Future<void> carregarDados() async {
+    setState(() {
+      carregando = true;
+      erro = null;
+    });
+
+    try {
+      final resultados = await Future.wait([
+        ApiService.listarAlugueis(),
+        ApiService.listarCarros(),
+        ApiService.listarAdaptacoes(),
+      ]);
+
+      final alugueisJson = resultados[0];
+      final carrosJson = resultados[1];
+      final adaptacoesJson = resultados[2];
+
+      if (!mounted) return;
+
+      // Relaciona cada adaptação ao seu veículo.
+      final Map<int, Map<String, dynamic>> adaptacoesPorCarro = {};
+
+      for (final item in adaptacoesJson) {
+        final adaptacao = Map<String, dynamic>.from(item);
+
+        final ativo = adaptacao['ativo'] ?? adaptacao['Ativo'] ?? false;
+        final carroId = adaptacao['carro_ID'] ?? adaptacao['Carro_ID'];
+
+        if (ativo == true && carroId != null) {
+          adaptacoesPorCarro[carroId] = adaptacao;
+        }
+      }
+
+      // Converte os veículos.
+      final carros = carrosJson.map((item) {
+        final json = Map<String, dynamic>.from(item);
+
+        final id = json['id'] ?? json['ID'];
+
+        return MapEntry<int, Carro>(
+          id,
+          Carro.fromJson(json, adaptacao: adaptacoesPorCarro[id]),
+        );
+      }).toList();
+
+      final carrosPorId = Map<int, Carro>.fromEntries(carros);
+
+      // Converte as locações.
+      final alugueis = alugueisJson.map((item) {
+        final json = Map<String, dynamic>.from(item);
+
+        final carroId = json['carro_ID'] ?? json['Carro_ID'];
+
+        // Trata o veículo.
+        Carro? carro = carroId == null ? null : carrosPorId[carroId];
+
+        if (carro == null) {
+          final carroJson = json['carro'] ?? json['Carro'];
+
+          if (carroJson is Map) {
+            carro = Carro.fromJson(
+              Map<String, dynamic>.from(carroJson),
+              adaptacao: carroId == null ? null : adaptacoesPorCarro[carroId],
+            );
+          }
+        }
+
+        if (carro == null) {
+          throw Exception(
+            'Veículo não encontrado para a locação ID ${json['id'] ?? json['ID']}.',
+          );
+        }
+
+        // Trata o cliente.
+        final clienteJson = json['cliente'] ?? json['Cliente'];
+
+        final cliente = clienteJson is Map
+            ? Map<String, dynamic>.from(clienteJson)
+            : <String, dynamic>{};
+
+        // Cria uma cópia do JSON com um cliente válido,
+        // mesmo quando a API retorna cliente nulo.
+        final aluguelJson = {
+          ...json,
+          'cliente': {
+            'nome':
+                cliente['nome'] ?? cliente['Nome'] ?? 'Cliente não informado',
+            'cpf': cliente['cpf'] ?? cliente['CPF'] ?? '',
+          },
+        };
+
+        return Aluguel.fromJson(aluguelJson, carro: carro);
+      }).toList();
+
+      setState(() {
+        _estoque = carrosPorId.values.toList();
+        _alugueis = alugueis;
+        carregando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        erro = e.toString();
+        carregando = false;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -489,123 +719,7 @@ class _TelaDoisState extends State<tela_dois>
       setState(() => busca = '');
     });
 
-    final hoje = DateTime.now();
-    DateTime dia(int delta) => hoje.add(Duration(days: delta));
-
-    _alugueis = [
-      Aluguel(
-        carro: const Carro(
-          modelo: 'Onix 1.0',
-          cor: 'Prata',
-          placa: 'ABC-1D23',
-          chassi: '9BGKS48U0LG123456',
-          conservacao: 'Bom',
-          abastecido: true,
-          tempoParado: '12 dias',
-          vezesOficina: 2,
-          tipoAdaptacao: 'Câmbio automático',
-        ),
-        nome: 'João Silva',
-        cpf: '123.456.789-00',
-        localizacao: 'São José do Rio Preto - SP',
-        cnh: '04512398765',
-        dataAluguel: dia(-6),
-        dataEntrega: dia(1),
-      ),
-      Aluguel(
-        carro: const Carro(
-          modelo: 'HB20 Sense',
-          cor: 'Branco',
-          placa: 'EFG-4H56',
-          chassi: '9BHBG51CAMP654321',
-          conservacao: 'Excelente',
-          abastecido: false,
-          tempoParado: '3 dias',
-          vezesOficina: 0,
-          tipoAdaptacao: 'Comando de acelerador manual',
-          adaptacaoPcd: 'Acelerador e freio manuais',
-        ),
-        nome: 'Maria Souza',
-        cpf: '987.654.321-00',
-        localizacao: 'Mirassol - SP',
-        cnh: '07894561230',
-        pcdUsuario: 'Acelerador e freio manuais',
-        dataAluguel: dia(-4),
-        dataEntrega: dia(6),
-      ),
-      Aluguel(
-        carro: const Carro(
-          modelo: 'Argo Drive',
-          cor: 'Preto',
-          placa: 'IJK-7L89',
-          chassi: '9BD358A1NMY987654',
-          conservacao: 'Regular',
-          abastecido: true,
-          tempoParado: '25 dias',
-          vezesOficina: 4,
-          tipoAdaptacao: 'Nenhuma',
-        ),
-        nome: 'Carlos Lima',
-        cpf: '456.123.789-55',
-        localizacao: 'Bady Bassitt - SP',
-        cnh: '01234567890',
-        dataAluguel: dia(-10),
-        dataEntrega: dia(-1),
-      ),
-    ];
-
-    _estoque = const [
-      Carro(
-        modelo: 'Onix Plus',
-        cor: 'Cinza',
-        placa: 'LMN-1A23',
-        chassi: '9BGEA69B0NG111222',
-        conservacao: 'Excelente',
-        abastecido: true,
-        tempoParado: '5 dias',
-        vezesOficina: 1,
-        tipoAdaptacao: 'Nenhuma',
-        status: 'Disponível',
-      ),
-      Carro(
-        modelo: 'Creta Action',
-        cor: 'Vermelho',
-        placa: 'OPQ-2B34',
-        chassi: '9BHBH41CAMP333444',
-        conservacao: 'Bom',
-        abastecido: false,
-        tempoParado: '18 dias',
-        vezesOficina: 3,
-        tipoAdaptacao: 'Câmbio automático',
-        adaptacaoPcd: 'Rampa de acesso e volante com manopla',
-        status: 'Em revisão',
-      ),
-      Carro(
-        modelo: 'Mobi Like',
-        cor: 'Azul',
-        placa: 'RST-3C45',
-        chassi: '9BD195A1NMY555666',
-        conservacao: 'Regular',
-        abastecido: true,
-        tempoParado: '40 dias',
-        vezesOficina: 5,
-        tipoAdaptacao: 'Nenhuma',
-        status: 'Aguardando limpeza',
-      ),
-      Carro(
-        modelo: 'Polo Track',
-        cor: 'Branco',
-        placa: 'UVW-4D56',
-        chassi: '9BWAH5BZ0NP777888',
-        conservacao: 'Bom',
-        abastecido: true,
-        tempoParado: '9 dias',
-        vezesOficina: 1,
-        tipoAdaptacao: 'Embreagem eletrônica',
-        adaptacaoPcd: 'Embreagem eletrônica no volante',
-        status: 'Disponível',
-      ),
-    ];
+    carregarDados();
   }
 
   @override
@@ -631,51 +745,83 @@ class _TelaDoisState extends State<tela_dois>
               children: [
                 _cabecalho(p, escuro),
                 Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1000),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  child: carregando
+                      ? const Center(child: CircularProgressIndicator())
+                      : erro != null
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Não foi possível carregar os dados.',
+                                style: TextStyle(color: p.texto),
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton(
+                                onPressed: carregarDados,
+                                child: const Text('Tentar novamente'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : TabBarView(
+                          controller: _tabs,
                           children: [
-                            Text(
-                              'FROTA',
-                              style: TextStyle(
-                                color: p.destaque,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.4,
-                              ),
+                            _abaAlugados(
+                              _alugueis.where((a) => a.combina(busca)).toList(),
+                              p,
                             ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Gestão de veículos',
-                              style: TextStyle(
-                                color: p.texto,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            _barraAbas(p),
-                            const SizedBox(height: 16),
-                            _barraPesquisa(p),
-                            const SizedBox(height: 12),
-                            Expanded(
-                              child: TabBarView(
-                                controller: _tabs,
-                                children: [
-                                  _abaAlugados(alugados, p),
-                                  _abaEstoque(estoque, p),
-                                ],
-                              ),
+                            _abaEstoque(
+                              _estoque.where((c) => c.combina(busca)).toList(),
+                              p,
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                  ),
+                  // child: Center(
+                  //   child: ConstrainedBox(
+                  //     constraints: const BoxConstraints(maxWidth: 1000),
+                  //     child: Padding(
+                  //       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  //       child: Column(
+                  //         crossAxisAlignment: CrossAxisAlignment.start,
+                  //         children: [
+                  //           Text(
+                  //             'FROTA',
+                  //             style: TextStyle(
+                  //               color: p.destaque,
+                  //               fontSize: 10,
+                  //               fontWeight: FontWeight.w800,
+                  //               letterSpacing: 1.4,
+                  //             ),
+                  //           ),
+                  //           const SizedBox(height: 6),
+                  //           Text(
+                  //             'Gestão de veículos',
+                  //             style: TextStyle(
+                  //               color: p.texto,
+                  //               fontSize: 24,
+                  //               fontWeight: FontWeight.w700,
+                  //             ),
+                  //           ),
+                  //           const SizedBox(height: 12),
+                  //           _barraAbas(p),
+                  //           const SizedBox(height: 16),
+                  //           _barraPesquisa(p),
+                  //           const SizedBox(height: 12),
+                  //           Expanded(
+                  //             child: TabBarView(
+                  //               controller: _tabs,
+                  //               children: [
+                  //                 _abaAlugados(alugados, p),
+                  //                 _abaEstoque(estoque, p),
+                  //               ],
+                  //             ),
+                  //           ),
+                  //         ],
+                  //       ),
+                  //     ),
+                  //   ),
+                  // ),
                 ),
               ],
             ),
@@ -720,16 +866,16 @@ class _TelaDoisState extends State<tela_dois>
 
   Widget _barraAbas(Paleta p) {
     Widget aba(IconData icone, String texto) => Tab(
-          height: 44,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icone, size: 16),
-              const SizedBox(width: 8),
-              Text(texto),
-            ],
-          ),
-        );
+      height: 44,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icone, size: 16),
+          const SizedBox(width: 8),
+          Text(texto),
+        ],
+      ),
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -745,8 +891,10 @@ class _TelaDoisState extends State<tela_dois>
         labelColor: p.destaque,
         unselectedLabelColor: p.textoSuave,
         labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-        unselectedLabelStyle:
-            const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
         overlayColor: WidgetStatePropertyAll(p.destaque.withOpacity(0.08)),
         tabs: [
           aba(Icons.key_outlined, 'Carros Alugados'),
@@ -758,9 +906,9 @@ class _TelaDoisState extends State<tela_dois>
 
   Widget _barraPesquisa(Paleta p) {
     OutlineInputBorder borda(Color cor) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: cor),
-        );
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: cor),
+    );
 
     return TextField(
       controller: pesquisaController,
@@ -804,8 +952,7 @@ class _TelaDoisState extends State<tela_dois>
                         padding: const EdgeInsets.only(bottom: 20),
                         itemCount: lista.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (context, i) =>
-                            _cardAluguel(lista[i], p),
+                        itemBuilder: (context, i) => _cardAluguel(lista[i], p),
                       );
                     }
                     return _tabela(
@@ -815,7 +962,7 @@ class _TelaDoisState extends State<tela_dois>
                         'Modelo',
                         'Cor',
                         'Placa',
-                        'Status'
+                        'Status',
                       ],
                       larguras: const {
                         0: FlexColumnWidth(2.2),
@@ -829,17 +976,28 @@ class _TelaDoisState extends State<tela_dois>
                           _LinhaTabela(
                             onTap: () => _abrirDetalhesAluguel(a, p),
                             celulas: [
-                              Text(a.nome,
-                                  style: TextStyle(
-                                      color: p.texto,
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.w700)),
-                              Text(a.carro.modelo,
-                                  style: TextStyle(
-                                      color: p.texto, fontSize: 13.5)),
-                              Text(a.carro.cor,
-                                  style: TextStyle(
-                                      color: p.texto, fontSize: 13.5)),
+                              Text(
+                                a.nome,
+                                style: TextStyle(
+                                  color: p.texto,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                a.carro.modelo,
+                                style: TextStyle(
+                                  color: p.texto,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                              Text(
+                                a.carro.cor,
+                                style: TextStyle(
+                                  color: p.texto,
+                                  fontSize: 13.5,
+                                ),
+                              ),
                               _chipPlaca(a.carro.placa, p),
                               _chipStatus(a.status, a.tom),
                             ],
@@ -933,14 +1091,21 @@ class _TelaDoisState extends State<tela_dois>
                           _LinhaTabela(
                             onTap: () => _abrirDetalhesCarro(car, p),
                             celulas: [
-                              Text(car.modelo,
-                                  style: TextStyle(
-                                      color: p.texto,
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.w700)),
-                              Text(car.cor,
-                                  style: TextStyle(
-                                      color: p.texto, fontSize: 13.5)),
+                              Text(
+                                car.modelo,
+                                style: TextStyle(
+                                  color: p.texto,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                car.cor,
+                                style: TextStyle(
+                                  color: p.texto,
+                                  fontSize: 13.5,
+                                ),
+                              ),
                               _chipPlaca(car.placa, p),
                               _chipStatus(car.status, _tomEstoque(car.status)),
                             ],
@@ -997,12 +1162,12 @@ class _TelaDoisState extends State<tela_dois>
   }
 
   Widget _contador(int n, Paleta p) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Text(
-          '$n ${n == 1 ? 'resultado' : 'resultados'}',
-          style: TextStyle(color: p.textoSuave, fontSize: 11),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Text(
+      '$n ${n == 1 ? 'resultado' : 'resultados'}',
+      style: TextStyle(color: p.textoSuave, fontSize: 11),
+    ),
+  );
 
   Widget _vazio(Paleta p, String titulo) {
     return Center(
@@ -1014,7 +1179,10 @@ class _TelaDoisState extends State<tela_dois>
           Text(
             titulo,
             style: TextStyle(
-                color: p.texto, fontSize: 14, fontWeight: FontWeight.w700),
+              color: p.texto,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -1076,7 +1244,9 @@ class _TelaDoisState extends State<tela_dois>
       TableRow(
         decoration: BoxDecoration(color: p.campo),
         children: colunas
-            .map((c) => celula(Text(
+            .map(
+              (c) => celula(
+                Text(
                   c.toUpperCase(),
                   style: TextStyle(
                     color: p.textoSuave,
@@ -1084,7 +1254,9 @@ class _TelaDoisState extends State<tela_dois>
                     fontWeight: FontWeight.w800,
                     letterSpacing: 1.0,
                   ),
-                )))
+                ),
+              ),
+            )
             .toList(),
       ),
       for (final l in linhas)
@@ -1285,8 +1457,11 @@ class _TelaDoisState extends State<tela_dois>
                         borderRadius: BorderRadius.circular(20),
                         child: Padding(
                           padding: const EdgeInsets.all(4),
-                          child:
-                              Icon(Icons.close, size: 20, color: p.textoSuave),
+                          child: Icon(
+                            Icons.close,
+                            size: 20,
+                            color: p.textoSuave,
+                          ),
                         ),
                       ),
                     ],
@@ -1294,10 +1469,7 @@ class _TelaDoisState extends State<tela_dois>
                   const SizedBox(height: 16),
                   cabecalho,
                   const SizedBox(height: 20),
-                  for (final s in secoes) ...[
-                    s,
-                    const SizedBox(height: 14),
-                  ],
+                  for (final s in secoes) ...[s, const SizedBox(height: 14)],
                   const SizedBox(height: 6),
                   SizedBox(
                     width: double.infinity,
@@ -1315,7 +1487,9 @@ class _TelaDoisState extends State<tela_dois>
                       child: const Text(
                         'Fechar',
                         style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w700),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
@@ -1418,44 +1592,22 @@ class _TelaDoisState extends State<tela_dois>
 
   List<Widget> _secoesCarro(Carro c, Paleta p) {
     return [
-      _secao(
-        'Identificação do veículo',
-        Icons.directions_car_outlined,
-        [
-          _info('Modelo', c.modelo, p),
-          _info('Cor', c.cor, p),
-          _infoW('Placa', _chipPlaca(c.placa, p), p),
-          _info('Chassi', c.chassi, p),
-        ],
-        p,
-      ),
-      _secao(
-        'Condição do veículo',
-        Icons.build_circle_outlined,
-        [
-          _info('Estado / conservação', c.conservacao, p),
-          _infoW(
-              'Abastecido', _chipSimNao(c.abastecido, 'Sim', 'Não'), p),
-          _info('Tempo sem ser alugado', c.tempoParado, p),
-          _info(
-            'Idas à oficina',
-            '${c.vezesOficina} ${c.vezesOficina == 1 ? 'vez' : 'vezes'}',
-            p,
-          ),
-        ],
-        p,
-      ),
-      _secao(
-        'Adaptações',
-        Icons.accessible_forward_outlined,
-        [
-          _info('Tipo de adaptação', c.tipoAdaptacao, p),
-          _infoW('Adaptação PCD', _chipSimNao(c.possuiPcd, 'Possui', 'Não possui'),
-              p),
-          if (c.possuiPcd) _info('Tipo de adaptação PCD', c.adaptacaoPcd!, p),
-        ],
-        p,
-      ),
+      _secao('Identificação do veículo', Icons.directions_car_outlined, [
+        _info('Modelo', c.modelo, p),
+        _info('Cor', c.cor, p),
+        _infoW('Placa', _chipPlaca(c.placa, p), p),
+        _info('Chassi', c.chassi, p),
+      ], p),
+      
+      _secao('Adaptações', Icons.accessible_forward_outlined, [
+        _info('Tipo de adaptação', c.tipoAdaptacao, p),
+        _infoW(
+          'Adaptação PCD',
+          _chipSimNao(c.possuiPcd, 'Possui', 'Não possui'),
+          p,
+        ),
+        if (c.possuiPcd) _info('Tipo de adaptação PCD', c.adaptacaoPcd!, p),
+      ], p),
     ];
   }
 
@@ -1469,10 +1621,14 @@ class _TelaDoisState extends State<tela_dois>
       };
       final numero = d < 0 ? '${-d}' : '$d';
       final legenda = d < 0
-          ? (d == -1 ? 'dia de atraso na devolução' : 'dias de atraso na devolução')
+          ? (d == -1
+                ? 'dia de atraso na devolução'
+                : 'dias de atraso na devolução')
           : d == 0
-              ? 'devolução prevista para hoje'
-              : (d == 1 ? 'dia para devolver o carro' : 'dias para devolver o carro');
+          ? 'devolução prevista para hoje'
+          : (d == 1
+                ? 'dia para devolver o carro'
+                : 'dias para devolver o carro');
 
       final destaque = Container(
         width: double.infinity,
@@ -1531,25 +1687,21 @@ class _TelaDoisState extends State<tela_dois>
         ),
         secoes: [
           destaque,
-          _secao(
-            'Usuário e aluguel',
-            Icons.badge_outlined,
-            [
-              _info('Nome', a.nome, p),
-              _info('CPF', a.cpf, p),
-              _info('Localização', a.localizacao, p),
-              _info('Número da CNH', a.cnh, p),
-              _info('Data do aluguel', _fmt(a.dataAluguel), p),
-              _info('Data de entrega', _fmt(a.dataEntrega), p),
-              _info(
-                'Dias para devolver',
-                d < 0 ? 'Atrasado há ${-d} ${-d == 1 ? 'dia' : 'dias'}' : '$d ${d == 1 ? 'dia' : 'dias'}',
-                p,
-              ),
-              _info('Adaptação PCD do usuário', a.pcdUsuario ?? 'Nenhuma', p),
-            ],
-            p,
-          ),
+          _secao('Usuário e aluguel', Icons.badge_outlined, [
+            _info('Nome', a.nome, p),
+            _info('CPF', a.cpf, p),
+
+            _info('Data do aluguel', _fmt(a.dataAluguel), p),
+            _info('Data de entrega', _fmt(a.dataEntrega), p),
+            _info(
+              'Dias para devolver',
+              d < 0
+                  ? 'Atrasado há ${-d} ${-d == 1 ? 'dia' : 'dias'}'
+                  : '$d ${d == 1 ? 'dia' : 'dias'}',
+              p,
+            ),
+            
+          ], p),
           ..._secoesCarro(a.carro, p),
         ],
       );
